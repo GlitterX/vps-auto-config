@@ -29,13 +29,9 @@ __pycache__/
 *.pyc
 
 # Trellis local/runtime artifacts
-.trellis/.runtime/
-.trellis/workspace/
-.trellis/tasks/
-.trellis/.developer
-.trellis/.current-task
-.trellis/.agent-log
+.trellis/
 
 # Optional local AI tool state
-.codex/sessions/
-.codex/cache/
+.codex/
+
+AGENTS.md
