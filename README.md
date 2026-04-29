@@ -25,6 +25,7 @@
 - `curl + bootstrap` 启动方式
 - 修改 `/etc` 配置前自动备份
 - 尽量支持幂等（重复执行时跳过已完成项）
+- 主要配置更新支持“有则改、无则加、相同则跳过”
 - 聚焦“首装初始化”，不强行变成完整运维平台
 
 ## 支持范围
@@ -63,9 +64,10 @@
 - `UFW` 防火墙规则配置
 - `Fail2ban` 安装与基础参数写入
 - `SSH` 配置项选择：
-  - 禁用密码登录
-  - 禁用 `root` 直登
-  - 修改端口
+  - `PubkeyAuthentication` 勾选控制
+  - `PasswordAuthentication` 勾选控制
+  - `PermitRootLogin` 支持 `yes / no / prohibit-password`
+  - `Port` 单独修改
 - 自动安全更新
 
 #### 3. 系统配置
@@ -93,7 +95,7 @@
 ### 方式一：本地仓库运行
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/GlitterX/vps-auto-config.git
 cd VPS-auto-config
 sudo bash install.sh
 ```
@@ -103,15 +105,15 @@ sudo bash install.sh
 如果仓库已经发布到 GitHub，可以直接从远端启动：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/bootstrap.sh \
-  | sudo BOOTSTRAP_GITHUB_REPO=<owner>/<repo> bash
+curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh \
+  | sudo BOOTSTRAP_GITHUB_REPO=GlitterX/vps-auto-config bash
 ```
 
 也可以显式指定归档地址：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/bootstrap.sh \
-  | sudo BOOTSTRAP_ARCHIVE_URL=https://codeload.github.com/<owner>/<repo>/tar.gz/refs/heads/main bash
+curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh \
+  | sudo BOOTSTRAP_ARCHIVE_URL=https://codeload.github.com/GlitterX/vps-auto-config/tar.gz/refs/heads/main bash
 ```
 
 ## 使用流程
