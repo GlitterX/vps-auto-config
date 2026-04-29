@@ -6,7 +6,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BOOTSTRAP_REF="${BOOTSTRAP_REF:-main}"
 BOOTSTRAP_GITHUB_REPO="${BOOTSTRAP_GITHUB_REPO:-}"
 BOOTSTRAP_ARCHIVE_URL="${BOOTSTRAP_ARCHIVE_URL:-}"
-BOOTSTRAP_DEFAULT_GITHUB_REPO="${BOOTSTRAP_DEFAULT_GITHUB_REPO:-GlitterX/vps-auto-config}"
 
 log() {
   printf '[bootstrap] %s\n' "$*" >&2
@@ -16,53 +15,27 @@ has_command() {
   command -v "$1" >/dev/null 2>&1
 }
 
-build_github_archive_url() {
-  local repo="$1"
-  local ref="$2"
-
-  printf 'https://codeload.github.com/%s/tar.gz/refs/heads/%s\n' "$repo" "$ref"
-}
-
-resolve_repo_from_remote() {
-  local target_dir="$1"
-  local remote
-  local repo
-
-  if ! has_command git || ! git -C "$target_dir" config --get remote.origin.url >/dev/null 2>&1; then
-    return 1
-  fi
-
-  remote="$(git -C "$target_dir" config --get remote.origin.url)"
-  repo="$(printf '%s' "$remote" | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')"
-
-  if [[ -z "$repo" || "$repo" != */* ]]; then
-    return 1
-  fi
-
-  printf '%s\n' "$repo"
-}
-
 resolve_archive_url() {
-  local repo
-
   if [[ -n "$BOOTSTRAP_ARCHIVE_URL" ]]; then
     printf '%s\n' "$BOOTSTRAP_ARCHIVE_URL"
     return 0
   fi
 
   if [[ -n "$BOOTSTRAP_GITHUB_REPO" ]]; then
-    build_github_archive_url "$BOOTSTRAP_GITHUB_REPO" "$BOOTSTRAP_REF"
+    printf 'https://codeload.github.com/%s/tar.gz/refs/heads/%s\n' "$BOOTSTRAP_GITHUB_REPO" "$BOOTSTRAP_REF"
     return 0
   fi
 
-  if repo="$(resolve_repo_from_remote "$SCRIPT_DIR")"; then
-    build_github_archive_url "$repo" "$BOOTSTRAP_REF"
-    return 0
-  fi
+  if has_command git && git -C "$SCRIPT_DIR" config --get remote.origin.url >/dev/null 2>&1; then
+    local remote
+    local repo
 
-  if [[ -n "$BOOTSTRAP_DEFAULT_GITHUB_REPO" ]]; then
-    build_github_archive_url "$BOOTSTRAP_DEFAULT_GITHUB_REPO" "$BOOTSTRAP_REF"
-    return 0
+    remote="$(git -C "$SCRIPT_DIR" config --get remote.origin.url)"
+    repo="$(printf '%s' "$remote" | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')"
+    if [[ -n "$repo" && "$repo" == */* ]]; then
+      printf 'https://codeload.github.com/%s/tar.gz/refs/heads/%s\n' "$repo" "$BOOTSTRAP_REF"
+      return 0
+    fi
   fi
 
   return 1
@@ -126,6 +99,4 @@ main() {
   exec bash "$extracted_root/install.sh" "$@"
 }
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  main "$@"
-fi
+main "$@"

@@ -39,3 +39,9 @@ __pycache__/
 # Optional local AI tool state
 .codex/sessions/
 .codex/cache/
+
+# AI workflow / local collaboration metadata
+.agents/
+.codex/
+.trellis/
+AGENTS.md

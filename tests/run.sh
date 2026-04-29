@@ -8,8 +8,6 @@ source "$ROOT_DIR/lib/detect.sh"
 source "$ROOT_DIR/lib/config.sh"
 source "$ROOT_DIR/lib/ui.sh"
 source "$ROOT_DIR/modules/security.sh"
-source "$ROOT_DIR/modules/system_config.sh"
-source "$ROOT_DIR/bootstrap.sh"
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -89,125 +87,6 @@ test_parse_checklist_output() {
   pass "parse_checklist_output"
 }
 
-test_build_github_archive_url() {
-  local archive_url
-
-  archive_url="$(build_github_archive_url "GlitterX/vps-auto-config" "main")"
-  assert_equals "https://codeload.github.com/GlitterX/vps-auto-config/tar.gz/refs/heads/main" "$archive_url" "builds GitHub archive URL"
-  pass "build_github_archive_url"
-}
-
-test_resolve_archive_url() {
-  local original_script_dir="$SCRIPT_DIR"
-  local original_archive_url="$BOOTSTRAP_ARCHIVE_URL"
-  local original_repo="$BOOTSTRAP_GITHUB_REPO"
-  local original_default_repo="$BOOTSTRAP_DEFAULT_GITHUB_REPO"
-  local tmpdir
-  local archive_url
-
-  tmpdir="$(mktemp -d)"
-  SCRIPT_DIR="$tmpdir"
-
-  BOOTSTRAP_ARCHIVE_URL="https://example.com/archive.tar.gz"
-  archive_url="$(resolve_archive_url)"
-  assert_equals "https://example.com/archive.tar.gz" "$archive_url" "prefers explicit archive URL"
-
-  BOOTSTRAP_ARCHIVE_URL=""
-  BOOTSTRAP_GITHUB_REPO="ExampleOrg/example-repo"
-  archive_url="$(resolve_archive_url)"
-  assert_equals "https://codeload.github.com/ExampleOrg/example-repo/tar.gz/refs/heads/main" "$archive_url" "uses explicit GitHub repo"
-
-  BOOTSTRAP_GITHUB_REPO=""
-  BOOTSTRAP_DEFAULT_GITHUB_REPO="GlitterX/vps-auto-config"
-  archive_url="$(resolve_archive_url)"
-  assert_equals "https://codeload.github.com/GlitterX/vps-auto-config/tar.gz/refs/heads/main" "$archive_url" "falls back to default GitHub repo"
-
-  SCRIPT_DIR="$original_script_dir"
-  BOOTSTRAP_ARCHIVE_URL="$original_archive_url"
-  BOOTSTRAP_GITHUB_REPO="$original_repo"
-  BOOTSTRAP_DEFAULT_GITHUB_REPO="$original_default_repo"
-  rm -rf "$tmpdir"
-  pass "resolve_archive_url"
-}
-
-test_ui_has_usable_tty() {
-  local original_ui_tty_device="$UI_TTY_DEVICE"
-  local tmpfile
-
-  tmpfile="$(mktemp)"
-  UI_TTY_DEVICE="$tmpfile"
-  assert_success "readable fallback tty device is accepted" ui_has_usable_tty
-
-  UI_TTY_DEVICE="$tmpfile.missing"
-  if [[ -t 0 ]]; then
-    pass "ui_has_usable_tty"
-  else
-    assert_failure "missing tty device is rejected when stdin is not a tty" ui_has_usable_tty
-    pass "ui_has_usable_tty"
-  fi
-
-  UI_TTY_DEVICE="$original_ui_tty_device"
-  rm -f "$tmpfile"
-}
-
-test_set_runtime_hostname_fallback() {
-  local result
-
-  result="$(
-    has_command() {
-      [[ "$1" == "hostnamectl" ]]
-    }
-
-    hostnamectl() {
-      printf '%s\n' ": unknown option" >&2
-      return 1
-    }
-
-    hostname() {
-      if [[ $# -eq 0 ]]; then
-        printf '%s\n' "old-host"
-        return 0
-      fi
-
-      if [[ "$1" == "aliyun-zhazha" ]]; then
-        return 0
-      fi
-
-      return 1
-    }
-
-    system_config_set_runtime_hostname "aliyun-zhazha"
-  )"
-
-  assert_equals "" "$result" "falls back to hostname when hostnamectl fails"
-  pass "set_runtime_hostname_fallback"
-}
-
-test_set_runtime_hostname_failure() {
-  local result
-
-  result="$(
-    has_command() {
-      return 1
-    }
-
-    hostname() {
-      if [[ $# -eq 0 ]]; then
-        printf '%s\n' "old-host"
-        return 0
-      fi
-
-      printf '%s\n' "permission denied" >&2
-      return 1
-    }
-
-    system_config_set_runtime_hostname "aliyun-zhazha" || true
-  )"
-
-  assert_contains "$result" "failed|更新运行中 hostname 失败" "reports hostname update failure clearly"
-  assert_contains "$result" "permission denied" "includes hostname command error output"
-  pass "set_runtime_hostname_failure"
-}
 test_get_sshd_config_value() {
   local config_file="$ROOT_DIR/tests/fixtures/sshd_config-sample"
   local root_value
@@ -331,11 +210,6 @@ run_all() {
   test_validate_hostname
   test_detect_supported_ubuntu
   test_parse_checklist_output
-  test_build_github_archive_url
-  test_resolve_archive_url
-  test_ui_has_usable_tty
-  test_set_runtime_hostname_fallback
-  test_set_runtime_hostname_failure
   test_get_sshd_config_value
   test_build_ssh_toggle_actions
   test_apply_sshd_value

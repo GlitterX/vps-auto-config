@@ -106,21 +106,14 @@ sudo bash install.sh
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh \
-  | sudo bash
+  | sudo BOOTSTRAP_GITHUB_REPO=GlitterX/vps-auto-config bash
 ```
 
-如果你使用的是 fork（派生仓库）或非默认分支，可以显式指定来源：
+也可以显式指定归档地址：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh \
-  | sudo BOOTSTRAP_GITHUB_REPO=GlitterX/vps-auto-config BOOTSTRAP_REF=main bash
-```
-
-也可以先下载后执行：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh -o /tmp/vps-bootstrap.sh
-sudo bash /tmp/vps-bootstrap.sh
+  | sudo BOOTSTRAP_ARCHIVE_URL=https://codeload.github.com/GlitterX/vps-auto-config/tar.gz/refs/heads/main bash
 ```
 
 ## 使用流程
