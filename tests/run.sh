@@ -167,6 +167,77 @@ test_ui_has_usable_tty() {
   rm -f "$tmpfile"
 }
 
+test_ui_menu_falls_back_to_xterm_for_unknown_term() {
+  local resolved_term
+  local tmpfile
+
+  tmpfile="$(mktemp)"
+  resolved_term="$(
+    TERM="xterm-kitty"
+
+    infocmp() {
+      [[ "$1" == "xterm" ]]
+    }
+
+    whiptail() {
+      printf '%s\n' "$TERM" >"$tmpfile"
+    }
+
+    ui_menu "标题" "提示" "value" "label"
+  )"
+
+  resolved_term="$(cat "$tmpfile")"
+  rm -f "$tmpfile"
+  assert_equals "xterm" "$resolved_term" "falls back to xterm when current TERM is unsupported"
+  pass "ui_menu_falls_back_to_xterm_for_unknown_term"
+}
+
+test_ui_menu_keeps_supported_term() {
+  local resolved_term
+  local tmpfile
+
+  tmpfile="$(mktemp)"
+  resolved_term="$(
+    TERM="xterm-256color"
+
+    infocmp() {
+      [[ "$1" == "xterm-256color" ]]
+    }
+
+    whiptail() {
+      printf '%s\n' "$TERM" >"$tmpfile"
+    }
+
+    ui_menu "标题" "提示" "value" "label"
+  )"
+
+  resolved_term="$(cat "$tmpfile")"
+  rm -f "$tmpfile"
+  assert_equals "xterm-256color" "$resolved_term" "keeps supported TERM for whiptail"
+  pass "ui_menu_keeps_supported_term"
+}
+
+test_ui_menu_fails_when_no_usable_term_exists() {
+  local output
+
+  output="$(
+    TERM="xterm-kitty"
+
+    infocmp() {
+      return 1
+    }
+
+    whiptail() {
+      fail "whiptail should not run without a usable TERM"
+    }
+
+    ui_menu "标题" "提示" "value" "label" 2>&1 || true
+  )"
+
+  assert_contains "$output" "未找到可用的终端类型" "fails clearly when no compatible TERM exists"
+  pass "ui_menu_fails_when_no_usable_term_exists"
+}
+
 test_set_runtime_hostname_fallback() {
   local result
 
@@ -354,6 +425,9 @@ run_all() {
   test_bootstrap_should_run_main
   test_resolve_archive_url
   test_ui_has_usable_tty
+  test_ui_menu_falls_back_to_xterm_for_unknown_term
+  test_ui_menu_keeps_supported_term
+  test_ui_menu_fails_when_no_usable_term_exists
   test_set_runtime_hostname_fallback
   test_set_runtime_hostname_failure
   test_get_sshd_config_value
