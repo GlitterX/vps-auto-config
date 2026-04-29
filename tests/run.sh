@@ -10,6 +10,7 @@ source "$ROOT_DIR/lib/ui.sh"
 source "$ROOT_DIR/modules/security.sh"
 source "$ROOT_DIR/modules/system_config.sh"
 source "$ROOT_DIR/bootstrap.sh"
+source "$ROOT_DIR/install.sh"
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -420,6 +421,21 @@ test_set_runtime_hostname_failure() {
   pass "set_runtime_hostname_failure"
 }
 
+test_render_plan_preview_uses_option_safe_bullets() {
+  local captured_prompt
+
+  PLANNED_ACTIONS=("system_config|system_config:hostname|设置 hostname 为 aliyun-zha|aliyun-zha")
+
+  ui_confirm() {
+    printf '%s' "$2"
+  }
+
+  captured_prompt="$(render_plan_preview)"
+  assert_contains "$captured_prompt" "* 设置 hostname 为 aliyun-zha" "uses option-safe preview bullet"
+  assert_not_contains "$captured_prompt" "- 设置 hostname 为 aliyun-zha" "does not start preview lines with hyphen"
+  pass "render_plan_preview_uses_option_safe_bullets"
+}
+
 test_get_sshd_config_value() {
   local config_file="$ROOT_DIR/tests/fixtures/sshd_config-sample"
   local root_value
@@ -556,6 +572,7 @@ run_all() {
   test_set_runtime_hostname_fallback
   test_set_runtime_hostname_fallback_when_hostnamectl_is_noisy
   test_set_runtime_hostname_failure
+  test_render_plan_preview_uses_option_safe_bullets
   test_get_sshd_config_value
   test_build_ssh_toggle_actions
   test_apply_sshd_value

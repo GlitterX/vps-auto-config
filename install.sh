@@ -91,7 +91,7 @@ render_plan_preview() {
 
   for action_line in "${PLANNED_ACTIONS[@]}"; do
     IFS='|' read -r module_name action_id summary payload <<<"$action_line"
-    preview+="- $summary"$'\n'
+    preview+="* $summary"$'\n'
   done
 
   if has_high_risk_actions; then
