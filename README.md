@@ -102,7 +102,7 @@ sudo bash install.sh
 
 ### 方式二：通过 bootstrap 运行
 
-如果仓库已经发布到 GitHub，可以直接从远端启动：
+可以直接从远端启动：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh \
