@@ -97,6 +97,23 @@ test_build_github_archive_url() {
   pass "build_github_archive_url"
 }
 
+test_resolve_script_dir() {
+  local resolved
+
+  resolved="$(resolve_script_dir "$ROOT_DIR/bootstrap.sh")"
+  assert_equals "$ROOT_DIR" "$resolved" "resolves script directory from file path"
+
+  assert_failure "empty script path is rejected" resolve_script_dir ""
+  pass "resolve_script_dir"
+}
+
+test_bootstrap_should_run_main() {
+  assert_success "runs main for stdin execution" bootstrap_should_run_main "" ""
+  assert_success "runs main for file execution" bootstrap_should_run_main "./bootstrap.sh" "./bootstrap.sh"
+  assert_failure "skips main when sourced" bootstrap_should_run_main "$ROOT_DIR/bootstrap.sh" "$ROOT_DIR/tests/run.sh"
+  pass "bootstrap_should_run_main"
+}
+
 test_resolve_archive_url() {
   local original_script_dir="$SCRIPT_DIR"
   local original_archive_url="$BOOTSTRAP_ARCHIVE_URL"
@@ -333,6 +350,8 @@ run_all() {
   test_detect_supported_ubuntu
   test_parse_checklist_output
   test_build_github_archive_url
+  test_resolve_script_dir
+  test_bootstrap_should_run_main
   test_resolve_archive_url
   test_ui_has_usable_tty
   test_set_runtime_hostname_fallback

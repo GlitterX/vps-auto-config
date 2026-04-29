@@ -2,7 +2,28 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+resolve_script_dir() {
+  local script_path="${1:-}"
+
+  if [[ -z "$script_path" ]]; then
+    return 1
+  fi
+
+  cd "$(dirname "$script_path")" && pwd
+}
+
+bootstrap_should_run_main() {
+  local script_source="${1:-}"
+  local shell_argv0="${2:-}"
+
+  [[ -z "$script_source" || "$script_source" == "$shell_argv0" ]]
+}
+
+SCRIPT_SOURCE_PATH="${BASH_SOURCE[0]-}"
+SCRIPT_DIR=""
+if [[ -n "$SCRIPT_SOURCE_PATH" ]]; then
+  SCRIPT_DIR="$(resolve_script_dir "$SCRIPT_SOURCE_PATH")"
+fi
 BOOTSTRAP_REF="${BOOTSTRAP_REF:-main}"
 BOOTSTRAP_GITHUB_REPO="${BOOTSTRAP_GITHUB_REPO:-}"
 BOOTSTRAP_ARCHIVE_URL="${BOOTSTRAP_ARCHIVE_URL:-}"
@@ -87,7 +108,7 @@ download_archive() {
 }
 
 run_local_install() {
-  if [[ -f "$SCRIPT_DIR/install.sh" && -d "$SCRIPT_DIR/lib" && -d "$SCRIPT_DIR/modules" ]]; then
+  if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/install.sh" && -d "$SCRIPT_DIR/lib" && -d "$SCRIPT_DIR/modules" ]]; then
     log "检测到本地仓库，直接执行 install.sh"
     exec bash "$SCRIPT_DIR/install.sh" "$@"
   fi
@@ -126,6 +147,6 @@ main() {
   exec bash "$extracted_root/install.sh" "$@"
 }
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+if bootstrap_should_run_main "${BASH_SOURCE[0]-}" "$0"; then
   main "$@"
 fi
