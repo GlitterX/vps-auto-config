@@ -17,6 +17,10 @@ ui_has_usable_tty() {
   [[ -t 0 || -r "$UI_TTY_DEVICE" ]]
 }
 
+ui_has_interactive_stdin() {
+  [[ -t 0 ]]
+}
+
 ui_terminfo_exists() {
   local term_name="${1:-}"
 
@@ -62,6 +66,18 @@ ui_resolve_whiptail_term() {
   return 1
 }
 
+ui_reset_terminal_state() {
+  if ! ui_has_interactive_stdin; then
+    return 0
+  fi
+
+  if ! command -v stty >/dev/null 2>&1; then
+    return 0
+  fi
+
+  stty sane 2>/dev/null || true
+}
+
 ui_run_whiptail() {
   local whiptail_term
 
@@ -74,6 +90,7 @@ ui_run_whiptail() {
     return 1
   fi
 
+  ui_reset_terminal_state
   TERM="$whiptail_term" whiptail "$@"
 }
 

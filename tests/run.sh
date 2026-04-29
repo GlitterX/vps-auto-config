@@ -40,6 +40,16 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local haystack="$1"
+  local needle="$2"
+  local label="$3"
+
+  if [[ "$haystack" == *"$needle"* ]]; then
+    fail "$label (unexpected: $needle)"
+  fi
+}
+
 assert_success() {
   local label="$1"
   shift
@@ -238,6 +248,76 @@ test_ui_menu_fails_when_no_usable_term_exists() {
   pass "ui_menu_fails_when_no_usable_term_exists"
 }
 
+test_ui_menu_resets_terminal_for_interactive_tty() {
+  local events
+  local tmpfile
+
+  tmpfile="$(mktemp)"
+  (
+    TERM="xterm"
+    UI_TEST_EVENTS_FILE="$tmpfile"
+
+    ui_has_interactive_stdin() {
+      return 0
+    }
+
+    infocmp() {
+      [[ "$1" == "xterm" ]]
+    }
+
+    stty() {
+      printf 'stty:%s\n' "$*" >>"$UI_TEST_EVENTS_FILE"
+    }
+
+    whiptail() {
+      printf 'whiptail:%s\n' "$TERM" >>"$UI_TEST_EVENTS_FILE"
+    }
+
+    ui_menu "标题" "提示" "value" "label"
+  )
+
+  events="$(cat "$tmpfile")"
+  rm -f "$tmpfile"
+  assert_contains "$events" "stty:sane" "resets terminal state before whiptail on interactive tty"
+  assert_contains "$events" "whiptail:xterm" "continues to launch whiptail after terminal reset"
+  pass "ui_menu_resets_terminal_for_interactive_tty"
+}
+
+test_ui_menu_skips_terminal_reset_without_interactive_tty() {
+  local events
+  local tmpfile
+
+  tmpfile="$(mktemp)"
+  (
+    TERM="xterm"
+    UI_TEST_EVENTS_FILE="$tmpfile"
+
+    ui_has_interactive_stdin() {
+      return 1
+    }
+
+    infocmp() {
+      [[ "$1" == "xterm" ]]
+    }
+
+    stty() {
+      printf 'stty:%s\n' "$*" >>"$UI_TEST_EVENTS_FILE"
+    }
+
+    whiptail() {
+      printf 'whiptail:%s\n' "$TERM" >>"$UI_TEST_EVENTS_FILE"
+    }
+
+    ui_menu "标题" "提示" "value" "label"
+  )
+
+  events="$(cat "$tmpfile")"
+  rm -f "$tmpfile"
+  assert_not_contains "$events" "stty:sane" "skips terminal reset without interactive tty"
+  assert_contains "$events" "whiptail:xterm" "still launches whiptail when term is usable"
+  pass "ui_menu_skips_terminal_reset_without_interactive_tty"
+}
+
 test_set_runtime_hostname_fallback() {
   local result
 
@@ -428,6 +508,8 @@ run_all() {
   test_ui_menu_falls_back_to_xterm_for_unknown_term
   test_ui_menu_keeps_supported_term
   test_ui_menu_fails_when_no_usable_term_exists
+  test_ui_menu_resets_terminal_for_interactive_tty
+  test_ui_menu_skips_terminal_reset_without_interactive_tty
   test_set_runtime_hostname_fallback
   test_set_runtime_hostname_failure
   test_get_sshd_config_value
