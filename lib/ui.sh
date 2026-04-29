@@ -10,6 +10,38 @@ parse_whiptail_checklist_output() {
   done
 }
 
+UI_TTY_DEVICE="${UI_TTY_DEVICE:-/dev/tty}"
+UI_STDIN_PREPARED=0
+
+ui_has_usable_tty() {
+  [[ -t 0 || -r "$UI_TTY_DEVICE" ]]
+}
+
+ui_prepare_stdin() {
+  if [[ "$UI_STDIN_PREPARED" -eq 1 ]]; then
+    return 0
+  fi
+
+  if [[ -t 0 ]]; then
+    UI_STDIN_PREPARED=1
+    return 0
+  fi
+
+  if [[ -r "$UI_TTY_DEVICE" ]]; then
+    exec <"$UI_TTY_DEVICE"
+    UI_STDIN_PREPARED=1
+    return 0
+  fi
+
+  if declare -F log_error >/dev/null 2>&1; then
+    log_error "未检测到可交互终端，whiptail 无法正常工作。请直接在 SSH 终端中运行，或先下载脚本后再执行。"
+  else
+    printf '%s\n' "未检测到可交互终端，whiptail 无法正常工作。请直接在 SSH 终端中运行，或先下载脚本后再执行。" >&2
+  fi
+
+  return 1
+}
+
 ui_checklist() {
   local title="$1"
   local prompt="$2"
