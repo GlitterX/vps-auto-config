@@ -17,6 +17,7 @@ This project values small, surgical shell scripts over abstraction-heavy framewo
 - Do not add large generic helper layers for one-off behavior. Prefer focused functions with clear callers.
 - Do not assume packages or commands exist before checking (`apt-get`, `whiptail`, `systemctl`, `timedatectl`, etc.).
 - Do not mix user-facing status text with machine-readable function output when a caller parses stdout.
+- Do not launch `whiptail` from a non-interactive stdin without rebinding to `/dev/tty` or failing early with a clear message.
 
 ---
 
@@ -27,6 +28,7 @@ This project values small, surgical shell scripts over abstraction-heavy framewo
 - Perform state detection before installation or configuration so repeated runs can skip completed work.
 - Keep comments brief and only where parsing or safety logic is non-obvious.
 - Emit user-facing progress through logging helpers and reserve structured stdout for command results.
+- When bootstrap entrypoints may run through pipes (`curl | bash`), restore interactive stdin before the first `whiptail` prompt.
 
 ---
 

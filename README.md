@@ -102,18 +102,25 @@ sudo bash install.sh
 
 ### 方式二：通过 bootstrap 运行
 
-如果仓库已经发布到 GitHub，可以直接从远端启动：
+可以直接从远端启动：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh \
-  | sudo BOOTSTRAP_GITHUB_REPO=GlitterX/vps-auto-config bash
+  | sudo bash
 ```
 
-也可以显式指定归档地址：
+如果你使用的是 fork（派生仓库）或非默认分支，可以显式指定来源：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh \
-  | sudo BOOTSTRAP_ARCHIVE_URL=https://codeload.github.com/GlitterX/vps-auto-config/tar.gz/refs/heads/main bash
+  | sudo BOOTSTRAP_GITHUB_REPO=GlitterX/vps-auto-config BOOTSTRAP_REF=main bash
+```
+
+也可以先下载后执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh -o /tmp/vps-bootstrap.sh
+sudo bash /tmp/vps-bootstrap.sh
 ```
 
 ## 使用流程
