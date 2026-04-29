@@ -351,6 +351,49 @@ test_set_runtime_hostname_fallback() {
   pass "set_runtime_hostname_fallback"
 }
 
+test_set_runtime_hostname_fallback_when_hostnamectl_is_noisy() {
+  local result
+  local hostname_state_file
+
+  hostname_state_file="$(mktemp)"
+  printf '%s\n' "old-host" >"$hostname_state_file"
+
+  result="$(
+    has_command() {
+      [[ "$1" == "hostnamectl" ]]
+    }
+
+    hostnamectl() {
+      printf '%s\n' ": unknown option"
+      return 0
+    }
+
+    hostname() {
+      local current_hostname
+      current_hostname="$(cat "$hostname_state_file")"
+
+      if [[ $# -eq 0 ]]; then
+        printf '%s\n' "$current_hostname"
+        return 0
+      fi
+
+      if [[ "$1" == "aliyun-zhazha" ]]; then
+        printf '%s\n' "$1" >"$hostname_state_file"
+        return 0
+      fi
+
+      return 1
+    }
+
+    system_config_set_runtime_hostname "aliyun-zhazha"
+    printf 'runtime=%s\n' "$(cat "$hostname_state_file")"
+  )"
+
+  rm -f "$hostname_state_file"
+  assert_equals "runtime=aliyun-zhazha" "$result" "falls back when hostnamectl is noisy and runtime hostname stays unchanged"
+  pass "set_runtime_hostname_fallback_when_hostnamectl_is_noisy"
+}
+
 test_set_runtime_hostname_failure() {
   local result
 
@@ -511,6 +554,7 @@ run_all() {
   test_ui_menu_resets_terminal_for_interactive_tty
   test_ui_menu_skips_terminal_reset_without_interactive_tty
   test_set_runtime_hostname_fallback
+  test_set_runtime_hostname_fallback_when_hostnamectl_is_noisy
   test_set_runtime_hostname_failure
   test_get_sshd_config_value
   test_build_ssh_toggle_actions

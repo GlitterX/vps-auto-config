@@ -145,10 +145,14 @@ system_config_apply_timezone() {
 system_config_set_runtime_hostname() {
   local hostname_value="$1"
   local command_output
+  local current_hostname=""
 
   if has_command hostnamectl; then
     if command_output="$(hostnamectl set-hostname "$hostname_value" 2>&1)"; then
-      return 0
+      current_hostname="$(hostname 2>/dev/null || true)"
+      if [[ "$current_hostname" == "$hostname_value" ]]; then
+        return 0
+      fi
     fi
   fi
 
