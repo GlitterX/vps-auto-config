@@ -3,8 +3,7 @@
 SECURITY_OPTIONS=(
   "security:ufw|UFW 防火墙|按端口与协议配置防火墙规则"
   "security:fail2ban|Fail2ban|配置 SSH 暴力破解防护"
-  "security:ssh_disable_password|禁用 SSH 密码登录|需要先确认公钥状态"
-  "security:ssh_disable_root|禁用 root SSH 直登|修改 PermitRootLogin"
+  "security:ssh_auth|SSH 认证配置|配置 PermitRootLogin / PubkeyAuthentication / PasswordAuthentication"
   "security:ssh_change_port|修改 SSH 端口|需要输入新的 SSH 端口"
   "security:auto_updates|自动安全更新|启用 unattended-upgrades"
 )
@@ -98,6 +97,95 @@ security_collect_ssh_port() {
   done
 }
 
+get_sshd_config_value() {
+  local config_file="$1"
+  local key="$2"
+  local default_value="$3"
+  local value=""
+
+  [[ -f "$config_file" ]] || {
+    printf '%s\n' "$default_value"
+    return 0
+  }
+
+  value="$(grep -E "^[[:space:]#]*${key}[[:space:]]+" "$config_file" | tail -n 1 | sed -E "s/^[[:space:]#]*${key}[[:space:]]+([^[:space:]]+).*$/\\1/" || true)"
+
+  if [[ -z "$value" ]]; then
+    printf '%s\n' "$default_value"
+  else
+    printf '%s\n' "$value"
+  fi
+}
+
+security_tag_is_selected() {
+  local raw_selection="$1"
+  local target_tag="$2"
+  local selected_tag
+
+  while IFS= read -r selected_tag; do
+    [[ -n "$selected_tag" ]] || continue
+    if [[ "$selected_tag" == "$target_tag" ]]; then
+      return 0
+    fi
+  done < <(parse_whiptail_checklist_output "$raw_selection")
+
+  return 1
+}
+
+security_build_ssh_toggle_actions() {
+  local raw_selection="$1"
+  local pubkey_value="no"
+  local password_value="no"
+
+  if security_tag_is_selected "$raw_selection" "ssh:pubkey_auth"; then
+    pubkey_value="yes"
+  fi
+
+  if security_tag_is_selected "$raw_selection" "ssh:password_auth"; then
+    password_value="yes"
+  fi
+
+  printf 'PubkeyAuthentication=%s\n' "$pubkey_value"
+  printf 'PasswordAuthentication=%s\n' "$password_value"
+}
+
+security_collect_ssh_auth_settings() {
+  local config_file="${1:-/etc/ssh/sshd_config}"
+  local permit_root_current
+  local pubkey_current
+  local password_current
+  local checklist_raw
+  local root_login_mode
+  local toggle_actions
+  local pubkey_value
+  local password_value
+
+  permit_root_current="$(get_sshd_config_value "$config_file" "PermitRootLogin" "prohibit-password")"
+  pubkey_current="$(get_sshd_config_value "$config_file" "PubkeyAuthentication" "yes")"
+  password_current="$(get_sshd_config_value "$config_file" "PasswordAuthentication" "yes")"
+
+  checklist_raw="$(ui_checklist "SSH 认证配置" "勾选要启用的 SSH 认证方式" \
+    "ssh:pubkey_auth" "PubkeyAuthentication" "$([[ "$pubkey_current" == "yes" ]] && echo ON || echo OFF)" \
+    "ssh:password_auth" "PasswordAuthentication" "$([[ "$password_current" == "yes" ]] && echo ON || echo OFF)")" || return 1
+
+  root_login_mode="$(ui_menu "PermitRootLogin" "选择 root 登录模式" \
+    "yes" "允许 root 使用所有认证方式登录" \
+    "prohibit-password" "允许 root 使用密钥登录，禁止密码登录" \
+    "no" "完全禁止 root 登录")" || return 1
+
+  toggle_actions="$(security_build_ssh_toggle_actions "$checklist_raw")"
+  pubkey_value="$(printf '%s\n' "$toggle_actions" | awk -F= '/^PubkeyAuthentication=/{print $2}')"
+  password_value="$(printf '%s\n' "$toggle_actions" | awk -F= '/^PasswordAuthentication=/{print $2}')"
+
+  if [[ "$pubkey_value" == "no" && "$password_value" == "no" ]]; then
+    ui_message "PubkeyAuthentication 和 PasswordAuthentication 不能同时关闭。"
+    return 1
+  fi
+
+  printf 'PermitRootLogin=%s;PubkeyAuthentication=%s;PasswordAuthentication=%s\n' \
+    "$root_login_mode" "$pubkey_value" "$password_value"
+}
+
 security_plan_actions() {
   local raw_selection="$1"
   local selected_tag
@@ -115,17 +203,18 @@ security_plan_actions() {
         payload="$(security_collect_fail2ban_config)" || continue
         printf 'security|security:fail2ban|安装并配置 Fail2ban|%s\n' "$payload"
         ;;
-      security:ssh_disable_password)
-        if detect_authorized_key "/root"; then
-          ui_yesno "SSH 确认" "已检测到 root 公钥，确认禁用 SSH 密码登录吗？" || continue
+      security:ssh_auth)
+        payload="$(security_collect_ssh_auth_settings)" || continue
+        if [[ "$payload" == *"PasswordAuthentication=no"* ]]; then
+          if detect_authorized_key "/root"; then
+            ui_yesno "SSH 确认" "已检测到 root 公钥，确认按当前勾选结果更新 SSH 认证配置吗？" || continue
+          else
+            ui_yesno "SSH 风险确认" "未检测到 root 的 authorized_keys，且当前配置会关闭密码登录，确认继续吗？" || continue
+          fi
         else
-          ui_yesno "SSH 风险确认" "未检测到 root 的 authorized_keys。继续禁用 SSH 密码登录可能导致无法登录，确认继续吗？" || continue
+          ui_yesno "SSH 确认" "确认按当前勾选结果更新 SSH 认证配置吗？" || continue
         fi
-        printf 'security|security:ssh_disable_password|禁用 SSH 密码登录|PasswordAuthentication=no\n'
-        ;;
-      security:ssh_disable_root)
-        ui_yesno "SSH 确认" "确认禁用 root SSH 直登吗？" || continue
-        printf 'security|security:ssh_disable_root|禁用 root SSH 直登|PermitRootLogin=no\n'
+        printf 'security|security:ssh_auth|更新 SSH 认证配置|%s\n' "$payload"
         ;;
       security:ssh_change_port)
         payload="$(security_collect_ssh_port)" || continue
@@ -144,11 +233,23 @@ security_replace_config_value() {
   local key="$2"
   local value="$3"
 
-  if grep -Eq "^[#[:space:]]*${key}[[:space:]]+" "$file_path"; then
-    sed -i -E "s|^[#[:space:]]*${key}[[:space:]]+.*|${key} ${value}|" "$file_path"
-  else
-    printf '%s %s\n' "$key" "$value" >> "$file_path"
+  upsert_line_if_needed "$file_path" "^[[:space:]#]*${key}[[:space:]]+" "${key} ${value}"
+}
+
+security_apply_sshd_value() {
+  local file_path="$1"
+  local key="$2"
+  local desired_value="$3"
+  local current_value
+
+  current_value="$(get_sshd_config_value "$file_path" "$key" "__missing__")"
+
+  if [[ "$current_value" == "$desired_value" ]]; then
+    return 1
   fi
+
+  security_replace_config_value "$file_path" "$key" "$desired_value"
+  return 0
 }
 
 security_reload_ssh_service() {
@@ -185,13 +286,12 @@ security_run_fail2ban() {
   local maxretry
   local findtime
   local bantime
+  local desired_content
 
   IFS=';' read -r maxretry findtime bantime <<<"$payload"
 
   apt_install_packages fail2ban
-  backup_file /etc/fail2ban/jail.local
-
-  cat > /etc/fail2ban/jail.local <<EOF
+  desired_content="$(cat <<EOF
 [DEFAULT]
 bantime = ${bantime}
 findtime = ${findtime}
@@ -201,6 +301,12 @@ maxretry = ${maxretry}
 enabled = true
 backend = systemd
 EOF
+)"
+
+  if ! write_file_with_backup_if_changed /etc/fail2ban/jail.local "$desired_content"; then
+    printf 'skip|Fail2ban 配置已是目标状态\n'
+    return 0
+  fi
 
   if has_command systemctl; then
     systemctl enable fail2ban >/dev/null 2>&1 || true
@@ -213,23 +319,71 @@ EOF
 security_run_ssh_update() {
   local key="$1"
   local value="$2"
+  local changed=0
 
-  backup_file /etc/ssh/sshd_config
-  security_replace_config_value /etc/ssh/sshd_config "$key" "$value"
+  if security_apply_sshd_value /etc/ssh/sshd_config "$key" "$value"; then
+    backup_file /etc/ssh/sshd_config
+    security_replace_config_value /etc/ssh/sshd_config "$key" "$value"
+    changed=1
+  fi
+
+  if [[ "$changed" -eq 0 ]]; then
+    printf 'skip|SSH 配置已是目标值：%s=%s\n' "$key" "$value"
+    return 0
+  fi
+
   security_reload_ssh_service
   printf 'success|SSH 配置已更新：%s=%s\n' "$key" "$value"
 }
 
 security_run_auto_updates() {
-  apt_install_packages unattended-upgrades
-  backup_file /etc/apt/apt.conf.d/20auto-upgrades
+  local desired_content
 
-  cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+  apt_install_packages unattended-upgrades
+  desired_content="$(cat <<'EOF'
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 EOF
+)"
+
+  if ! write_file_with_backup_if_changed /etc/apt/apt.conf.d/20auto-upgrades "$desired_content"; then
+    printf 'skip|自动安全更新配置已是目标状态\n'
+    return 0
+  fi
 
   printf 'success|自动安全更新已启用\n'
+}
+
+security_run_ssh_auth() {
+  local payload="$1"
+  local permit_root
+  local pubkey_auth
+  local password_auth
+  local changed=0
+
+  permit_root="$(printf '%s' "$payload" | tr ';' '\n' | awk -F= '/^PermitRootLogin=/{print $2}')"
+  pubkey_auth="$(printf '%s' "$payload" | tr ';' '\n' | awk -F= '/^PubkeyAuthentication=/{print $2}')"
+  password_auth="$(printf '%s' "$payload" | tr ';' '\n' | awk -F= '/^PasswordAuthentication=/{print $2}')"
+
+  if [[ "$(get_sshd_config_value /etc/ssh/sshd_config "PermitRootLogin" "__missing__")" != "$permit_root" ]] || \
+     [[ "$(get_sshd_config_value /etc/ssh/sshd_config "PubkeyAuthentication" "__missing__")" != "$pubkey_auth" ]] || \
+     [[ "$(get_sshd_config_value /etc/ssh/sshd_config "PasswordAuthentication" "__missing__")" != "$password_auth" ]]; then
+    backup_file /etc/ssh/sshd_config
+    security_replace_config_value /etc/ssh/sshd_config "PermitRootLogin" "$permit_root"
+    security_replace_config_value /etc/ssh/sshd_config "PubkeyAuthentication" "$pubkey_auth"
+    security_replace_config_value /etc/ssh/sshd_config "PasswordAuthentication" "$password_auth"
+    changed=1
+  fi
+
+  if [[ "$changed" -eq 0 ]]; then
+    printf 'skip|SSH 认证配置已是目标状态\n'
+    return 0
+  fi
+
+  security_reload_ssh_service
+
+  printf 'success|SSH 认证配置已更新：PermitRootLogin=%s, PubkeyAuthentication=%s, PasswordAuthentication=%s\n' \
+    "$permit_root" "$pubkey_auth" "$password_auth"
 }
 
 security_run_action() {
@@ -243,11 +397,8 @@ security_run_action() {
     security:fail2ban)
       security_run_fail2ban "$payload"
       ;;
-    security:ssh_disable_password)
-      security_run_ssh_update "PasswordAuthentication" "no"
-      ;;
-    security:ssh_disable_root)
-      security_run_ssh_update "PermitRootLogin" "no"
+    security:ssh_auth)
+      security_run_ssh_auth "$payload"
       ;;
     security:ssh_change_port)
       security_run_ssh_update "Port" "$payload"

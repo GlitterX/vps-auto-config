@@ -1,0 +1,4 @@
+Port 21212
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+PubkeyAuthentication yes

@@ -136,7 +136,7 @@ system_config_apply_timezone() {
       return 1
     }
     ln -sf "/usr/share/zoneinfo/$timezone" /etc/localtime
-    printf '%s\n' "$timezone" > /etc/timezone
+    write_file_with_backup_if_changed /etc/timezone "$timezone"$'\n' || true
   fi
 
   printf 'success|时区已更新为：%s\n' "$timezone"
@@ -144,22 +144,31 @@ system_config_apply_timezone() {
 
 system_config_apply_hostname() {
   local hostname_value="$1"
+  local changed=0
+  local current_hostname_file=""
 
-  if [[ "$(hostname)" == "$hostname_value" ]]; then
-    printf 'skip|hostname 已是目标值：%s\n' "$hostname_value"
-    return 0
+  if [[ -f /etc/hostname ]]; then
+    current_hostname_file="$(tr -d '\r\n' < /etc/hostname)"
   fi
 
-  backup_file /etc/hostname
-  backup_file /etc/hosts
+  if [[ "$current_hostname_file" != "$hostname_value" ]]; then
+    backup_file /etc/hostname
+    printf '%s\n' "$hostname_value" > /etc/hostname
+    changed=1
+  fi
 
-  printf '%s\n' "$hostname_value" > /etc/hostname
-  hostnamectl set-hostname "$hostname_value"
+  if [[ "$(hostname)" != "$hostname_value" ]]; then
+    hostnamectl set-hostname "$hostname_value"
+    changed=1
+  fi
 
-  if grep -Eq '^127\.0\.1\.1[[:space:]]+' /etc/hosts; then
-    sed -i -E "s/^127\.0\.1\.1[[:space:]]+.*/127.0.1.1 ${hostname_value}/" /etc/hosts
-  else
-    printf '127.0.1.1 %s\n' "$hostname_value" >> /etc/hosts
+  if upsert_line_with_backup_if_needed /etc/hosts '^127\.0\.1\.1[[:space:]]+' "127.0.1.1 ${hostname_value}"; then
+    changed=1
+  fi
+
+  if [[ "$changed" -eq 0 ]]; then
+    printf 'skip|hostname 相关配置已是目标值：%s\n' "$hostname_value"
+    return 0
   fi
 
   printf 'success|hostname 已更新为：%s\n' "$hostname_value"
@@ -169,6 +178,8 @@ system_config_apply_swap() {
   local size="$1"
   local swap_type
   local size_mb
+  local desired_fstab_line="/swapfile none swap sw 0 0"
+  local changed=0
 
   swap_type="$(detect_swap_type)"
   if [[ "$swap_type" == "partition" ]]; then
@@ -177,7 +188,16 @@ system_config_apply_swap() {
   fi
 
   size_mb="$(normalize_size_to_mb "$size")"
-  backup_file /etc/fstab
+  if [[ -f /swapfile ]]; then
+    local current_swap_size_mb
+    current_swap_size_mb="$(( $(stat -c %s /swapfile 2>/dev/null || echo 0) / 1024 / 1024 ))"
+    if [[ "$swap_type" == "swapfile" && "$current_swap_size_mb" -eq "$size_mb" ]] && swapon --show | grep -q '/swapfile'; then
+      if ! upsert_line_with_backup_if_needed /etc/fstab '^/swapfile[[:space:]]+' "$desired_fstab_line"; then
+        printf 'skip|swapfile 已是目标状态：%s\n' "$size"
+        return 0
+      fi
+    fi
+  fi
 
   swapoff /swapfile >/dev/null 2>&1 || true
   rm -f /swapfile
@@ -191,12 +211,16 @@ system_config_apply_swap() {
   chmod 600 /swapfile
   mkswap /swapfile >/dev/null
   swapon /swapfile
+  changed=1
 
-  if grep -q '^/swapfile' /etc/fstab; then
-    sed -i -E 's#^/swapfile.*#/swapfile none swap sw 0 0#' /etc/fstab
-  else
-    printf '/swapfile none swap sw 0 0\n' >> /etc/fstab
+  if upsert_line_with_backup_if_needed /etc/fstab '^/swapfile[[:space:]]+' "$desired_fstab_line"; then
+    changed=1
   fi
+
+  [[ "$changed" -eq 1 ]] || {
+    printf 'skip|swapfile 已是目标状态：%s\n' "$size"
+    return 0
+  }
 
   printf 'success|swapfile 已配置为：%s\n' "$size"
 }
