@@ -106,14 +106,14 @@ sudo bash install.sh
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh \
-  | sudo bash
+  | sudo env TERM=xterm bash
 ```
 
 如果你使用的是 fork（派生仓库）或非默认分支，可以显式指定来源：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh \
-  | sudo BOOTSTRAP_GITHUB_REPO=GlitterX/vps-auto-config BOOTSTRAP_REF=main bash
+  | sudo env TERM=xterm BOOTSTRAP_GITHUB_REPO=GlitterX/vps-auto-config BOOTSTRAP_REF=main bash
 ```
 
 也可以先下载后执行：
@@ -121,6 +121,12 @@ curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/boots
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GlitterX/vps-auto-config/main/bootstrap.sh -o /tmp/vps-bootstrap.sh
 sudo bash /tmp/vps-bootstrap.sh
+```
+
+如果你在远程终端里看到菜单把方向键显示成 `^[[B` 这类转义序列，通常表示当前 `TERM` 与服务器上的 `whiptail` / `terminfo` 不兼容。优先使用上面的 `sudo env TERM=xterm bash` 写法；如果已经下载到本地文件，也可以这样执行：
+
+```bash
+sudo env TERM=xterm bash /tmp/vps-bootstrap.sh
 ```
 
 ## 使用流程
