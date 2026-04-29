@@ -1,0 +1,47 @@
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+
+# Local environment files
+.env
+.env.*
+.python-version
+
+# Editor / IDE
+.idea/
+.vscode/
+
+# Test / runtime artifacts
+coverage/
+tmp/
+*.out
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Trellis local/runtime artifacts
+.trellis/.runtime/
+.trellis/workspace/
+.trellis/tasks/
+.trellis/.developer
+.trellis/.current-task
+.trellis/.agent-log
+
+# Optional local AI tool state
+.codex/sessions/
+.codex/cache/
+
+# AI workflow / local collaboration metadata
+.agents/
+.codex/
+.trellis/
+AGENTS.md
