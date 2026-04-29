@@ -142,6 +142,24 @@ system_config_apply_timezone() {
   printf 'success|时区已更新为：%s\n' "$timezone"
 }
 
+system_config_set_runtime_hostname() {
+  local hostname_value="$1"
+  local command_output
+
+  if has_command hostnamectl; then
+    if command_output="$(hostnamectl set-hostname "$hostname_value" 2>&1)"; then
+      return 0
+    fi
+  fi
+
+  if command_output="$(hostname "$hostname_value" 2>&1)"; then
+    return 0
+  fi
+
+  printf 'failed|更新运行中 hostname 失败：%s\n' "${command_output:-未获取到错误信息}"
+  return 1
+}
+
 system_config_apply_hostname() {
   local hostname_value="$1"
   local changed=0
@@ -158,7 +176,7 @@ system_config_apply_hostname() {
   fi
 
   if [[ "$(hostname)" != "$hostname_value" ]]; then
-    hostnamectl set-hostname "$hostname_value"
+    system_config_set_runtime_hostname "$hostname_value" || return 1
     changed=1
   fi
 

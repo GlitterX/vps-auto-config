@@ -214,6 +214,7 @@ run_preflight() {
   local ubuntu_version
 
   require_root
+  ui_prepare_stdin
   ensure_apt_available
   ubuntu_version="$(get_ubuntu_version "/etc/os-release")"
 
